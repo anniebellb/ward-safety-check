@@ -1,0 +1,12 @@
+{
+  "name": "ward-safety-check",
+  "description": "A walk-around 3D safety simulation for training, and a skill to remix it for your own topic.",
+  "owner": { "name": "Annie Kiele Brown" },
+  "plugins": [
+    {
+      "name": "walkaround-safety-sim",
+      "source": "./plugins/walkaround-safety-sim",
+      "description": "Build or remix a walk-around 3D safety simulation: learners walk a room, spot what's wrong, answer a question with feedback, then fix it in the room."
+    }
+  ]
+}

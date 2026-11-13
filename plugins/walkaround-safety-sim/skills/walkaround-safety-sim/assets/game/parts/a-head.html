@@ -1,0 +1,441 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ward Safety Check</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+/* Palette */
+:root{
+  --navy:#283764; --blue:#0069B1; --cyan:#00A8E4; --pale:#E6F5FF; --orange:#FFA81E;
+  --pink:#E14B63; --ink:#272727; --muted:#5a6479; --line:#d5e1ee; --soft:#f1f6fb;
+  --panel:rgba(255,255,255,.97);
+  --font:'Lato',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--pale);font-family:var(--font);color:var(--ink);-webkit-font-smoothing:antialiased}
+/* Fills a sized frame; falls back to 16:9 if the host frame has no height yet */
+#app{position:relative;width:100%;height:max(100vh, min(56.25vw, 760px));min-height:480px;overflow:hidden;background:var(--pale)}
+#scene{position:absolute;inset:0;width:100%;height:100%;display:block;cursor:grab;touch-action:none;outline:none}
+#app.dragging #scene{cursor:grabbing}
+.hidden{display:none!important}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+kbd{display:inline-flex;align-items:center;justify-content:center;min-width:21px;height:21px;padding:0 6px;border-radius:6px;background:#fff;border:1px solid #c9d6e4;border-bottom-width:3px;font:900 11px/1 var(--font);color:var(--navy)}
+.panel{background:var(--panel);border-radius:14px;box-shadow:0 10px 28px rgba(40,55,100,.16),0 1px 0 rgba(255,255,255,.7) inset;backdrop-filter:blur(8px)}
+button{font-family:var(--font)}
+.btn{font:700 14px var(--font);border:0;border-radius:10px;padding:10px 16px;cursor:pointer;background:var(--soft);color:var(--navy);display:inline-flex;gap:8px;align-items:center;justify-content:center;transition:transform .08s,filter .15s,background .15s}
+.btn:hover{filter:brightness(.97)} .btn:active{transform:translateY(1px)}
+.btn.primary{background:var(--orange);color:var(--navy)}
+.btn.navy{background:var(--navy);color:#fff}
+.btn.navy kbd{background:rgba(255,255,255,.14);border-color:rgba(255,255,255,.3);color:#fff}
+:focus-visible{outline:3px solid var(--cyan);outline-offset:2px}
+.icon-btn{width:36px;height:36px;padding:0;border-radius:10px}
+
+/* Spacing scale: 4 / 8 inside a group, 18-20 between groups (proximity: related things sit together) */
+/* HUD */
+#hud{position:absolute;top:12px;left:12px;width:270px;padding:14px 10px 10px;z-index:5;max-height:calc(100% - 96px);overflow:auto;transition:max-height .25s}
+#app.ctl #hud{max-height:calc(100% - 156px)} /* always clears the bottom prompt and controls */
+.hud-top{padding:0 4px;margin-bottom:12px}
+.hud-head h1{font-size:15px;font-weight:900;margin:0;color:var(--navy)}
+.hud-sub{font-size:12px;font-weight:700;color:var(--muted);margin:4px 0 8px}
+.bar{height:6px;background:#e3ebf4;border-radius:99px;overflow:hidden}
+.bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--blue),var(--cyan));transition:width .5s}
+.inv{display:flex;flex-wrap:wrap;gap:6px;padding:0 4px;margin-bottom:16px}
+.chip{font-size:11.5px;font-weight:700;padding:4px 9px;border-radius:999px;background:var(--soft);color:var(--muted)}
+.chip.on{background:var(--pale);color:var(--blue)}
+.groups{display:grid;gap:2px;border-top:1px solid var(--line);padding-top:10px}
+.area-btn{width:100%;display:grid;grid-template-columns:1fr auto 16px;gap:8px;align-items:center;border:0;background:transparent;padding:8px 6px;border-radius:9px;cursor:pointer;text-align:left;color:var(--navy);font:900 13px var(--font)}
+.area-btn:hover{background:var(--soft)}
+.area-btn small{font-size:11px;font-weight:700;color:var(--muted)}
+.area.done .area-btn small{color:var(--blue)}
+.area-btn svg{width:14px;height:14px;transition:transform .2s;color:var(--muted)}
+.area-btn[aria-expanded=true] svg{transform:rotate(90deg)}
+.area ul{list-style:none;margin:2px 0 8px;padding:0 0 0 4px;display:grid;gap:4px}
+.area li button{width:100%;display:grid;grid-template-columns:30px 1fr 20px;align-items:center;gap:10px;padding:5px 6px;border:0;border-radius:9px;background:transparent;text-align:left;cursor:pointer;color:var(--ink)}
+.area li button:hover{background:var(--soft)}
+.area li.near button{background:var(--pale)}
+.area img{width:30px;height:30px;border-radius:8px;background:var(--soft);display:block;object-fit:contain}
+.area li b{display:block;font-size:12.5px;font-weight:700;line-height:1.2}
+.area li small{display:block;font-size:11px;font-weight:700;color:var(--muted);margin-top:2px}
+.chk{width:20px;height:20px;border-radius:50%;border:2px solid #cbd7e4;display:grid;place-items:center;color:transparent}
+.chk svg{width:11px;height:11px}
+.area li.done .chk{background:var(--blue);border-color:var(--blue);color:#fff}
+.area li.todo .chk{border-color:var(--orange);background:#fff}
+.area li.done b{color:var(--muted)}
+
+#tools{position:absolute;top:12px;right:12px;display:flex;gap:6px;padding:6px;z-index:5}
+#tools svg{width:18px;height:18px}
+#btnMusic .slash{display:none} #btnMusic[aria-pressed=false] .slash{display:inline} #btnMusic[aria-pressed=false] .waves{display:none} #btnMusic[aria-pressed=false]{color:var(--muted)}
+
+/* Bottom bar: the controls card sits bottom-left; the prompt lifts above it while it shows, so they never overlap */
+#prompt{position:absolute;left:50%;bottom:16px;transform:translateX(-50%);padding:7px 8px 7px 14px;font-weight:700;font-size:14px;display:flex;gap:10px;align-items:center;z-index:5;color:var(--navy);max-width:min(640px,calc(100% - 24px));transition:bottom .25s}
+#prompt.hint{padding:10px 16px;background:var(--navy);color:#fff;line-height:1.4;box-shadow:0 10px 28px rgba(40,55,100,.22),0 0 0 3px rgba(0,168,228,.45);animation:nudge .5s ease-out}
+@keyframes nudge{0%{transform:translate(-50%,8px) scale(.96);opacity:0}60%{transform:translate(-50%,0) scale(1.03);opacity:1}100%{transform:translate(-50%,0) scale(1)}}
+#prompt .btn{padding:8px 12px}
+#app.ctl #prompt{bottom:96px}
+#toast{position:absolute;top:14px;left:50%;transform:translateX(-50%);padding:10px 14px;font-weight:700;font-size:14px;line-height:1.4;z-index:6;display:flex;gap:10px;align-items:center;max-width:min(520px,calc(100% - 600px));min-width:240px;transition:opacity .3s,transform .3s;color:var(--ink)}
+#toast .ic{width:24px;height:24px;border-radius:50%;background:var(--blue);color:#fff;display:grid;place-items:center;flex:none}
+#toast .ic svg{width:13px;height:13px}
+#toast.out{opacity:0;transform:translate(-50%,-8px);pointer-events:none}
+
+#controls{position:absolute;left:12px;bottom:12px;padding:10px 12px;font-size:11.5px;font-weight:700;color:var(--muted);display:grid;grid-template-columns:auto auto;gap:6px 16px;z-index:4;width:max-content;transition:opacity .4s}
+#controls span{display:inline-flex;gap:4px;align-items:center}
+#controls.fade{opacity:0;pointer-events:none}
+
+/* Inspect / question panel: three groups (what you see / the question and its answers / what's next) */
+#inspect{position:absolute;left:50%;bottom:12px;transform:translateX(-50%);width:min(820px,calc(100% - 24px));max-height:calc(100% - 84px);overflow:auto;display:grid;grid-template-columns:120px 1fr;gap:20px;padding:18px 20px 18px 18px;z-index:10;animation:rise .25s ease-out}
+@keyframes rise{from{transform:translate(-50%,16px);opacity:0}to{transform:translate(-50%,0);opacity:1}}
+.thumb{width:120px;height:120px;border-radius:14px;background:radial-gradient(circle at 50% 38%,#fff 0,var(--pale) 70%);display:grid;place-items:center;overflow:hidden}
+.thumb img{width:100%;height:100%;object-fit:contain}
+.ins-head{padding-right:40px}
+.ins-kicker{font-size:10.5px;font-weight:900;letter-spacing:.9px;color:var(--blue);text-transform:uppercase;margin-bottom:4px}
+.ins-title{font-size:18px;font-weight:900;color:var(--navy);margin:0 0 6px;line-height:1.2}
+.ins-scn{font-size:15px;line-height:1.45;margin:0;font-weight:400}
+.ins-ask{margin-top:20px}
+.ins-q{font-size:15px;line-height:1.4;margin:0 0 10px;font-weight:900;color:var(--navy)}
+.opts{display:grid;gap:8px}
+.opt{display:grid;grid-template-columns:24px 1fr 18px;column-gap:12px;align-items:center;text-align:left;border:2px solid var(--line);background:#fff;border-radius:11px;padding:9px 12px;font:700 14px/1.35 var(--font);color:var(--ink);cursor:pointer}
+.opt:hover:not(:disabled){border-color:var(--blue);background:#f7fbff}
+.opt .k{width:24px;height:24px;border-radius:7px;background:var(--soft);color:var(--navy);display:grid;place-items:center;font-weight:900;font-size:12px}
+.opt .m{width:18px;height:18px;display:grid;place-items:center}
+.opt .m svg{width:14px;height:14px}
+.opt .ofb{grid-column:2 / 4;margin-top:6px;padding-top:7px;border-top:1px solid currentColor;border-top-color:rgba(0,0,0,.1);font-weight:400;font-size:13.5px;line-height:1.45}
+.opt .ofb b{font-weight:900}
+.opt .ofb .again{display:block;margin-top:6px;font-weight:900}
+.opt:disabled{cursor:default}
+.opt.wrong{border-color:#f2b8c2;background:#fdf1f3;color:#6b1f2c}
+.opt.wrong .k{background:var(--pink);color:#fff}
+.opt.right{border-color:var(--blue);background:#eaf5fd;color:#143a5e}
+.opt.right .k{background:var(--blue);color:#fff}
+.opt.dim{opacity:.55}
+#insClose{position:absolute;top:12px;right:12px}
+.ins-after{margin-top:20px}
+.ins-after:empty{display:none}
+.next{border-left:4px solid var(--blue);background:var(--pale);border-radius:8px;padding:9px 12px;margin:0 0 12px;font-size:14px;line-height:1.45;font-weight:700;color:var(--navy)}
+.next b{color:var(--navy)}
+.ins-actions{display:flex;gap:8px;flex-wrap:wrap}
+.ins-actions:empty{display:none}
+.ins-actions .btn{min-width:110px}
+
+/* Overlays */
+.overlay{position:absolute;inset:0;display:grid;place-items:center;z-index:20;padding:16px;background:linear-gradient(180deg,rgba(40,55,100,.28),rgba(40,55,100,.5));backdrop-filter:blur(3px)}
+.card{width:min(580px,100%);padding:26px 28px 24px;border-radius:18px;background:#fff;box-shadow:0 24px 60px rgba(20,30,60,.3);max-height:calc(100% - 8px);overflow:auto}
+.card .kicker{font-size:11px;font-weight:900;letter-spacing:1px;color:var(--blue);text-transform:uppercase;margin-bottom:4px}
+.card h2{font-size:25px;font-weight:900;color:var(--navy);margin:0 0 8px;letter-spacing:-.2px}
+.card p{font-size:15.5px;line-height:1.5;margin:0}
+.card ul{margin:18px 0 0;padding:0;list-style:none;display:grid;gap:10px}
+.card li{display:grid;grid-template-columns:22px 1fr;gap:10px;font-size:14.5px;line-height:1.45}
+.card li .dot{width:22px;height:22px;border-radius:50%;background:var(--pale);color:var(--blue);display:grid;place-items:center;margin-top:1px}
+.card li .dot svg{width:12px;height:12px}
+.keys{display:flex;flex-wrap:wrap;gap:8px 16px;font-size:12.5px;font-weight:700;color:var(--muted);background:var(--soft);border-radius:12px;padding:12px 14px;margin:20px 0 0}
+.keys span{display:inline-flex;gap:4px;align-items:center}
+.card-foot{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:24px}
+.badge-done{width:52px;height:52px;border-radius:16px;background:var(--blue);color:#fff;display:grid;place-items:center;margin-bottom:14px}
+.badge-done svg{width:28px;height:28px}
+#confetti{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:21}
+
+#loading{position:absolute;inset:0;display:grid;place-items:center;font-weight:700;color:var(--navy);z-index:30;background:var(--pale)}
+#loading .spin{width:34px;height:34px;border-radius:50%;border:4px solid #cfe3f3;border-top-color:var(--blue);animation:sp 1s linear infinite;margin:0 auto 10px}
+@keyframes sp{to{transform:rotate(360deg)}}
+
+/* shorter frames (laptop-sized tiles): tighter panel so the item stays in view */
+@media (max-height:720px){
+  #inspect{gap:16px;padding:14px 16px 14px 14px}
+  .thumb{width:96px;height:96px}
+  #inspect{grid-template-columns:96px 1fr}
+  .ins-title{font-size:17px;margin-bottom:4px}
+  .ins-ask,.ins-after{margin-top:12px}
+  .ins-q{margin-bottom:8px}
+  .opts{gap:6px}
+  .opt{padding:7px 10px}
+  .opt .ofb{margin-top:5px;padding-top:5px}
+  .next{padding:7px 10px;margin-bottom:8px}
+}
+@media (max-width:980px){ #toast{max-width:calc(100% - 330px);left:auto;right:12px;top:64px;transform:none} #toast.out{transform:translateY(-8px)} }
+@media (max-width:820px){
+  #hud{width:228px;padding:12px 8px 8px}
+  .area li small{display:none}
+  #controls{display:none}
+  #app.ctl #prompt{bottom:16px}
+  #app.ctl #hud{max-height:calc(100% - 96px)}
+  #toast{max-width:calc(100% - 264px)}
+}
+@media (max-width:620px), (max-height:540px){
+  #hud{width:200px}
+  #inspect{grid-template-columns:1fr;padding:14px}
+  .thumb{display:none}
+  .ins-title{font-size:16px}
+  .ins-ask,.ins-after{margin-top:14px}
+  .ins-scn,.ins-q,.opt,.next{font-size:13.5px}
+}
+@media (prefers-reduced-motion:reduce){ *{animation:none!important;transition:none!important} }
+</style>
+</head>
+<body>
+<div id="app">
+<canvas id="scene" role="img" aria-label="A hospital ward with three patient bays, a lab prep area and an office desk. Use the checklist to reach each item." tabindex="-1"></canvas>
+<div id="loading"><div><div class="spin"></div>Setting up the floor…</div></div>
+
+<!-- HUD: the checklist doubles as the accessible way to reach every item and place -->
+<section id="hud" class="panel hidden" aria-label="Ward Safety Check checklist">
+  <div class="hud-top">
+    <div class="hud-head"><h1>Ward Safety Check</h1></div>
+    <div class="hud-sub" id="hudSub">Issues fixed: 0 of 8</div>
+    <div class="bar" aria-hidden="true"><i id="hudBar"></i></div>
+  </div>
+  <div class="inv" id="inv"></div>
+  <div class="groups" id="groups"></div>
+</section>
+<div id="tools" class="panel hidden">
+  <button class="btn icon-btn" id="btnZoomIn" aria-label="Zoom in" title="Zoom in"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
+  <button class="btn icon-btn" id="btnZoomOut" aria-label="Zoom out" title="Zoom out"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M5 12h14"/></svg></button>
+  <button class="btn icon-btn" id="btnReset" aria-label="Reset view" title="Reset view (R)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 4v5h5"/></svg></button>
+  <button class="btn icon-btn" id="btnMusic" aria-pressed="true" aria-label="Turn music off" title="Music on (M)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5v5h3.5L12 18.5v-13L7.5 9.5z" fill="currentColor"/><g class="waves"><path d="M15.5 9.2a4 4 0 0 1 0 5.6"/><path d="M18 6.8a7.4 7.4 0 0 1 0 10.4"/></g><g class="slash"><path d="M16 9.5l5 5M21 9.5l-5 5"/></g></svg></button>
+  <button class="btn icon-btn" id="btnHelp" aria-label="How to play" title="How to play"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.5 2.5 0 1 1 3.3 2.4c-.6.3-.9.8-.9 1.4v.4"/><circle cx="12" cy="17" r=".6" fill="currentColor"/></svg></button>
+</div>
+<div id="prompt" class="panel hidden"><span id="promptText"></span><button class="btn navy" id="promptBtn"><kbd>Enter</kbd><span id="promptAct">Inspect</span></button></div>
+<div id="toast" class="panel out" role="status" aria-live="polite"></div>
+<div id="controls" class="panel hidden" aria-hidden="true">
+  <span><kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd> walk</span>
+  <span><kbd>Q</kbd><kbd>E</kbd> turn the view</span>
+  <span><kbd>Enter</kbd> inspect / act</span>
+  <span>Select the floor or an item to walk there</span>
+</div>
+
+<!-- Inspect / question panel -->
+<section id="inspect" class="panel hidden" role="dialog" aria-modal="false" aria-labelledby="insTitle">
+  <div class="thumb"><img id="insImg" alt=""></div>
+  <div>
+    <div class="ins-head">
+      <div class="ins-kicker" id="insKicker">Inspect</div>
+      <h2 class="ins-title" id="insTitle"></h2>
+      <p class="ins-scn" id="insScn"></p>
+    </div>
+    <div class="ins-ask">
+      <p class="ins-q" id="insQ"></p>
+      <div class="opts" id="insOpts"></div>
+    </div>
+    <div class="ins-after" id="insAfter">
+      <div class="next hidden" id="insNext"></div>
+      <div class="ins-actions" id="insActions"></div>
+    </div>
+  </div>
+  <button class="btn icon-btn" id="insClose" aria-label="Close" title="Close (Esc)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" width="16" height="16"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+</section>
+
+<!-- Intro -->
+<div id="intro" class="overlay hidden">
+  <div class="card" role="dialog" aria-modal="true" aria-labelledby="introTitle">
+    <div class="kicker">Practice</div>
+    <h2 id="introTitle">Ward Safety Check</h2>
+    <p>Walk the hospital ward and check Bays 1, 2 and 3 and the lab prep area for anything that could hurt a patient or a teammate. Inspect each item and answer the question about it. Then fix what needs fixing: carry waste where it belongs, clean up hazards and label what needs a label.</p>
+    <div class="keys" aria-label="Controls">
+      <span><kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd> walk</span>
+      <span><kbd>Q</kbd><kbd>E</kbd> turn the view</span>
+      <span><kbd>Enter</kbd> inspect or act</span>
+      <span>Select the floor or an item to walk there</span>
+      <span>Or drag to turn the view</span>
+      <span><kbd>M</kbd> music on or off</span>
+      <span>Or use the checklist</span>
+    </div>
+    <div class="card-foot"><button class="btn primary" id="btnStart">Start</button></div>
+  </div>
+</div>
+
+<!-- Summary -->
+<div id="summary" class="overlay hidden">
+  <div class="card" role="dialog" aria-modal="true" aria-labelledby="sumTitle">
+    <div class="badge-done" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
+    <h2 id="sumTitle">Floor Is Safe</h2>
+    <ul id="sumList"></ul>
+    <div class="card-foot">
+      <button class="btn" id="btnExplore">Keep looking</button>
+      <button class="btn primary" id="btnAgain">Try again</button>
+    </div>
+  </div>
+</div>
+<canvas id="confetti" class="hidden" aria-hidden="true"></canvas>
+<div id="live" class="sr" aria-live="polite"></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(async function(){
+'use strict';
+const $ = id => document.getElementById(id);
+if(!window.THREE){ $('loading').textContent='The 3D view could not load. Check your connection and reload.'; return; }
+// wait briefly for Lato so text drawn into the 3D scene uses it
+if(document.fonts && document.fonts.load){
+  await Promise.race([Promise.all([document.fonts.load('900 40px "Lato"'),document.fonts.load('700 40px "Lato"')]), new Promise(r=>setTimeout(r,1500))]).catch(()=>{});
+}
+
+/* ================================================================== */
+/*  COMPLETION: tells a host page the activity is done (a plain        */
+/*  postMessage), for anyone embedding it in a lesson.                 */
+/* ================================================================== */
+let reported = false;
+function reportComplete(){
+  if(reported) return; reported = true;
+  try{ window.parent.postMessage({type:'complete'}, '*'); }catch(e){}
+}
+const DEBUG = location.hash==='#debug'; // QA only: timer-driven loop + state hook
+
+/* ================================================================== */
+/*  CONTENT: a general ward safety check (LearnCurio, Nov 2026).      */
+/*  Plain-language safety practice written for this game, not any      */
+/*  organisation's own rules, and nothing here is quoted from one.     */
+/* ================================================================== */
+const AREAS = [
+  {id:'s1', name:'Bay 1'}, {id:'s2', name:'Bay 2'}, {id:'s3', name:'Bay 3'}, {id:'lab', name:'Lab Prep Area'}
+];
+const AREA_NAME = Object.fromEntries(AREAS.map(a=>[a.id,a.name]));
+// Where carried waste goes: red bags to the receptacle, sealed sharps containers through the pickup door.
+const DEST = {
+  receptacle:{name:'medical waste receptacle', title:'Medical Waste Receptacle'},
+  door:      {name:'medical waste pickup area', title:'Medical Waste Pickup Area'}
+};
+// The "why" lines used in feedback, in plain words.
+const WHY = {
+  redBag:   'Full red bags are tied closed with one knot in the middle and double-bagged so nothing leaks, then taken to the medical waste receptacle where they can’t hurt anyone.',
+  sealed:   'A sharps container is full once it reaches the ¾ line. Seal it and take it to the medical waste pickup area.',
+  replaced: 'Overfilled sharps containers are how needlestick injuries happen, so they’re swapped for a new one at ¾.',
+  origin:   'Sharps go straight into a sharps container where they’re used. Nobody moves them by hand afterwards.',
+  cart:     'The supply cart is for clean supplies, so a sharps container doesn’t belong on it.',
+  noHands:  'Never pick up broken glass with your hands, even in gloves: it can cut you, and it may have blood on it.',
+  discard:  'Broken glass that may have touched blood is a sharp, so it goes in a sharps container.',
+  cleanPan: 'Clean and disinfect the dust pan and broom straight after.',
+  containers:'Anything that stores or carries blood, like a refrigerator, a transport container or a medical waste container, gets a biohazard label.',
+  equipment:'Equipment that is or could be contaminated with blood, like a centrifuge, gets a biohazard label too.',
+  labFridge:'A refrigerator for lab samples gets a biohazard label and a “Lab Specimens Only” sign, so nobody puts food in it.',
+  gloves:   'Gloves and hand rub are clean supplies, so they can be kept on the supply cart’s shelves.'
+};
+const ITEMS = [
+  { id:'bag', area:'s1', action:'carry', dest:'receptacle', name:'Full Red Bag', where:"Bay 1's medical waste container", lower:'red bag',
+    scenario:"The red bag lining Bay 1's medical waste container is full.",
+    question:'What should you do with this bag?',
+    options:[
+      {t:'Tie it with one knot in the middle, double-bag it and take it to the medical waste receptacle.', ok:true,
+       fb:'Right. '+WHY.redBag},
+      {t:'Push the waste down to make room for more.', fb:'A full bag is done. Pushing waste down can break the bag or cause a needlestick. '+WHY.redBag},
+      {t:'Tie the corners together and leave it under the bed.', fb:'Corner knots can come undone, and medical waste never waits at the bedside. '+WHY.redBag},
+      {t:'Set it on the supply cart until someone takes it.', fb:'The supply cart is for clean supplies. '+WHY.redBag}
+    ],
+    next:'Tie it, double-bag it and carry it to the medical waste receptacle.',
+    prep:'Tie it and double-bag it', prepPrompt:'Tie the red bag with one knot in the middle and double-bag it',
+    carrying:'Tied and double-bagged. Take it to the medical waste receptacle.',
+    done:'In the medical waste receptacle, tied and double-bagged.' },
+  { id:'supplies', area:'s1', action:'none', name:'Gloves and Hand Rub', where:"Bay 1's cart, lower shelf",
+    scenario:"Bay 1's cart has a box of disposable gloves and a pump bottle of hand rub on its lower shelf.",
+    question:'Can these stay here?',
+    options:[
+      {t:"Yes. Gloves and hand rub can be kept on the cart's shelves.", ok:true,
+       fb:'Right. '+WHY.gloves},
+      {t:'No. Nothing can be kept on the supply cart.', fb:'Clean supplies can. '+WHY.gloves+' It’s sharps containers and waste that don’t belong there.'},
+      {t:'No. They go to the medical waste pickup area.', fb:'They aren’t waste. '+WHY.gloves}
+    ] },
+  { id:'cartSharps', area:'s2', action:'carry', dest:'door', seal:true, name:'Sharps Container on the Cart', where:"Bay 2's cart", lower:'sharps container',
+    scenario:"A sharps container is sitting on top of Bay 2's cart. It has reached the ¾ line.",
+    question:'What should you do with it?',
+    options:[
+      {t:'Seal it, take it to the medical waste pickup area and get a new one that doesn’t go on the cart.', ok:true,
+       fb:'Right. '+WHY.sealed+' '+WHY.cart},
+      {t:"Move it to the cart's lower shelf.", fb:WHY.cart+' And at ¾ full, this one is sealed and taken to the medical waste pickup area.'},
+      {t:"Leave it on the cart until it's completely full.", fb:'It’s already full. '+WHY.replaced+' '+WHY.cart}
+    ],
+    next:'Seal it, then carry it to the medical waste pickup area.',
+    prep:'Seal it and pick it up', prepPrompt:'Seal the sharps container and pick it up',
+    carrying:'Sealed. Take it to the medical waste pickup area.',
+    done:'Sealed and in the medical waste pickup area. Its replacement doesn’t go on the cart.' },
+  { id:'glass', area:'s2', action:'glass', name:'Broken Lab Tube', where:"Floor beside Bay 2's bed",
+    scenario:"A lab tube has dropped and broken on the floor beside Bay 2's bed.",
+    question:'How should the broken glass be picked up?',
+    options:[
+      {t:'With a plastic dust pan and plastic hand broom.', ok:true, fb:'Right. A dust pan and broom keep your hands away from it. '+WHY.noHands},
+      {t:'Carefully, with gloved hands.', fb:'Gloves don’t make it safe. '+WHY.noHands+' Use a plastic dust pan and plastic hand broom.'},
+      {t:'With a paper towel, folded over.', fb:'That’s still picking it up by hand. '+WHY.noHands+' Use a plastic dust pan and plastic hand broom.'}
+    ],
+    next:'Get the plastic dust pan and hand broom from the cleanup supplies. Then come back and sweep up the glass.',
+    glassQ:{
+      question:'Where does the broken glass go?',
+      options:[
+        {t:'In a sharps container.', ok:true, fb:'Right. '+WHY.discard},
+        {t:'In the red bag.', fb:'A broken tube can cut through a bag. '+WHY.discard},
+        {t:'In the regular trash.', fb:'It could cut someone emptying the bin. '+WHY.discard}
+      ],
+      next:'Take it to the sharps container on the lab prep counter.'
+    },
+    done:'Swept up with the dust pan and broom and put in a sharps container. '+WHY.cleanPan },
+  { id:'counterSharps', area:'s3', action:'carry', dest:'door', seal:true, replace:true, name:'Overfilled Sharps Container', where:"Bay 3's counter", lower:'sharps container',
+    scenario:"The sharps container on Bay 3's counter is filled past the ¾ line. The lid barely closes.",
+    question:'What should happen to it?',
+    options:[
+      {t:'Seal it, take it to the medical waste pickup area and put a new one in its place.', ok:true,
+       fb:'Right. '+WHY.sealed+' '+WHY.replaced},
+      {t:"Keep using it until the lid won't close.", fb:'It’s already full. '+WHY.replaced},
+      {t:'Empty some of it into the red bag.', fb:WHY.origin+' This one is past ¾ full, so it’s sealed and taken to the medical waste pickup area.'}
+    ],
+    next:'Seal it, then carry it to the medical waste pickup area.',
+    prep:'Seal it and pick it up', prepPrompt:'Seal the sharps container and pick it up',
+    carrying:'Sealed. Take it to the medical waste pickup area.',
+    done:'Sealed and in the medical waste pickup area. A new sharps container is in its place.' },
+  { id:'fridge', area:'lab', action:'label', name:'Refrigerator', where:'Lab prep area',
+    scenario:'This refrigerator in the lab prep area holds blood samples. It has no biohazard label.',
+    question:'Does it need a biohazard label?',
+    options:[
+      {t:'Yes. It stores blood, so it gets a biohazard label.', ok:true, fb:'Right. '+WHY.labFridge},
+      {t:'No. Only the centrifuge needs a label.', fb:'Refrigerators that store blood get one too. '+WHY.containers},
+      {t:"Only if it's a freezer.", fb:'Both get one. '+WHY.containers}
+    ],
+    next:'Put a biohazard label and a “Lab Specimens Only” sign on it. They’re on the office desk.', nextHave:'Put a biohazard label and a “Lab Specimens Only” sign on it.',
+    labelVerb:'Label it',
+    done:'Labeled, with its “Lab Specimens Only” sign.' },
+  { id:'centrifuge', area:'lab', action:'label', name:'Centrifuge', where:'Lab prep counter',
+    scenario:'A centrifuge sits on the lab prep counter. It has no biohazard label.',
+    question:'What does the centrifuge need?',
+    options:[
+      {t:'A biohazard label, because it can be contaminated.', ok:true, fb:'Right. '+WHY.equipment},
+      {t:"Nothing. It spins samples but doesn't store them.", fb:'It doesn’t have to store anything. '+WHY.equipment},
+      {t:"A label only while it's running.", fb:'The label stays on. '+WHY.equipment}
+    ],
+    next:'Put a biohazard label on it. The labels are on the office desk.', nextHave:'Put a biohazard label on it.',
+    done:'Labeled. It’s equipment that could be contaminated.' },
+  { id:'transport', area:'lab', action:'label', name:'Transport Container', where:'Lab prep counter',
+    scenario:'This closed container is used to carry blood samples. It has no biohazard label.',
+    question:'Does it need a biohazard label?',
+    options:[
+      {t:"Yes. It's used to carry blood.", ok:true, fb:'Right. '+WHY.containers},
+      {t:'No. Only things that store blood get labels.', fb:'Containers that carry blood get one too. '+WHY.containers},
+      {t:'Only when a sample is inside it.', fb:'The label is about what the container is used for, so it stays on. '+WHY.containers}
+    ],
+    next:'Put a biohazard label on it. The labels are on the office desk.', nextHave:'Put a biohazard label on it.',
+    done:'Labeled. It carries blood samples.' },
+  { id:'medBin', area:'lab', action:'label', name:'Medical Waste Container', where:'Lab prep area floor',
+    scenario:'A lidded medical waste container lined with a red bag sits on the lab prep area floor. It has no biohazard label.',
+    question:'Does it need a biohazard label?',
+    options:[
+      {t:'Yes. Medical waste containers get one.', ok:true, fb:'Right. '+WHY.containers},
+      {t:'No. The red bag inside is enough.', fb:'The container needs its own label, so people know what’s inside before they open it. '+WHY.containers},
+      {t:'No. Only the containers at the bays need one.', fb:'Every medical waste container gets one. '+WHY.containers}
+    ],
+    next:'Put a biohazard label on it. The labels are on the office desk.', nextHave:'Put a biohazard label on it.',
+    done:'Labeled. Medical waste containers get a biohazard label.' },
+  { id:'cabinet', area:'lab', action:'none', name:'Clean Supply Cabinet', where:'Off to one side of the lab prep area',
+    scenario:'A clean supply cabinet stands off to one side of the lab prep area.',
+    question:'Does it need a biohazard label?',
+    options:[
+      {t:"No. It's clean storage.", ok:true, fb:'Right. It doesn’t store or carry blood, and it isn’t equipment that could be contaminated.'},
+      {t:'Yes. Everything in the lab prep area gets one.', fb:'Labels go on things that store or carry blood and on equipment that could be contaminated. Clean storage is neither.'},
+      {t:"Yes, because it's next to the refrigerator.", fb:'Being nearby doesn’t matter. Clean storage doesn’t hold blood and isn’t contaminated equipment.'}
+    ] }
+];
+const SUMMARY = [
+  'Full red bags are tied with one knot in the middle, double-bagged and taken to the medical waste receptacle.',
+  'Sharps containers are full at ¾. Seal them, take them to the medical waste pickup area and put a new one in place. They never go on the supply cart.',
+  'Never pick up broken glass with your hands. Use a plastic dust pan and hand broom, put the glass in a sharps container, then clean and disinfect the pan and broom.',
+  'Biohazard labels go on anything that stores or carries blood (the lab refrigerator, transport containers, medical waste containers) and on equipment that could be contaminated, like the centrifuge. Clean storage doesn’t get one.'
+];
+const FIX_TOTAL = ITEMS.filter(i=>i.action!=='none').length;
+
